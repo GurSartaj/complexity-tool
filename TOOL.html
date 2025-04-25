@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Proposal Complexity & Opportunity Cost Calculator</title>
+  <!-- Load TailwindCSS from CDN for styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Configure Tailwind to support dark mode via CSS class or data-theme attribute
+    tailwind.config = { darkMode: ['class','[data-theme="dark"]'] };
+  </script>
+  <!-- ADD: SheetJS for front-end .xlsx export -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    html { transition: background-color .3s, color .3s; }
+    /* Define theme color variables for light theme */
+    :root[data-theme="light"] {
+      --bg-start: #fdfdfd; --bg-end: #e2e8f0;
+      --header-bg: #e2e8f0; --accent: #38b2ac;
+      --panel-bg: #ffffff; --text: #1a202c;
+      --select-bg: #ffffff; --select-text: #1a202c;
+      --input-bg: #ffffff; --input-text: #1a202c;
+      --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --panel-border: #38b2ac;
+    }
+    /* Define theme color variables for dark theme */
+    :root[data-theme="dark"] {
+      --bg-start: #2d3748; --bg-end: #1a202c;
+      --header-bg: #4a5568; --accent: #81e6d9;
+      --panel-bg: #2d3748; --text: #f7fafc;
+      --select-bg: #4a5568; --select-text: #f7fafc;
+      --input-bg: #4a5568; --input-text: #f7fafc;
+      --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --panel-border: #81e6d9;
+    }
+    /* Define theme color variables for blue accent theme */
+    :root[data-theme="blue"] {
+      --bg-start: #ebf8ff; --bg-end: #bee3f8;
+      --header-bg: #90cdf4; --accent: #3182ce;
+      --panel-bg: #ebf8ff; --text: #2a4365;
+      --select-bg: #ffffff; --select-text: #2a4365;
+      --input-bg: #bee3f8; --input-text: #2a4365;
+      --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --panel-border: #3182ce;
+    }
+    /* Define theme color variables for green accent theme */
+    :root[data-theme="green"] {
+      --bg-start: #f0fff4; --bg-end: #c6f6d5;
+      --header-bg: #68d391; --accent: #38a169;
+      --panel-bg: #f0fff4; --text: #22543d;
+      --select-bg: #ffffff; --select-text: #22543d;
+      --input-bg: #c6f6d5; --input-text: #22543d;
+      --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --panel-border: #38a169;
+    }
+    /* Define theme color variables for red accent theme */
+    :root[data-theme="red"] {
+      --bg-start: #fff5f5; --bg-end: #fed7d7;
+      --header-bg: #fc8181; --accent: #e53e3e;
+      --panel-bg: #fff5f5; --text: #742a2a;
+      --select-bg: #ffffff; --select-text: #742a2a;
+      --input-bg: #fed7d7; --input-text: #742a2a;
+      --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --panel-border: #e53e3e;
+    }
+
+    /* Apply background gradient using theme variables */
+    body {
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+    }
+    /* Style for the main form container */
+    .form-container {
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      padding: 2rem; border-radius: 1rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+      font-family: var(--font-family); color: var(--text);
+	  margin-left: auto;
+      margin-right: auto;
+    }
+    /* Style for collapsible section headers */
+    details > summary {
+      cursor: pointer; background-color: var(--header-bg);
+      color: var(--text); border-radius: .5rem;
+      padding: .5rem 1rem; font-family: var(--font-family);
+    }
+    /* Ensure form inputs match theme styling */
+    select, input {
+      background-color: var(--input-bg) !important;
+      color: var(--input-text) !important;
+      border: 1px solid var(--panel-border) !important;
+      font-family: var(--font-family);
+    }
+    /* ─── Reserve right gutter so form never sits beneath sidebar ─── */
+    body {
+      /* sidebar width (18rem) + 1rem gap */
+      padding-right: 12rem !important;
+    }
+  
+    /* ─── Floating sidebar always visible in that gutter ─── */
+    #summary {
+      position: fixed !important;
+      top: 5rem !important;       /* below theme selector */
+      bottom: 1 !important;       /* stretch to bottom */
+      right: 1rem !important;     /* 1rem from right edge */
+      width: 18rem !important;    /* fill gutter */
+      padding: 1rem !important;
+      overflow-y: auto !important;/* scroll if content overflows */
+      background-color: var(--panel-bg);
+      border: 4px solid var(--panel-border);
+      z-index: 100;
+    }
+  
+    /* ─── Breathing room for the theme picker ─── */
+    #themeSelect {
+      margin-left: 1rem !important;
+    }
+  </style>
+</head>
+<body class="text-gray-900 dark:text-gray-100">
+
+  <!-- Theme Selector Dropdown in the top-right -->
+  <div class="fixed top-4 left-4 z-50">
+    <label for="themeSelect" class="sr-only">Select Theme</label>
+    <select id="themeSelect" class="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded">
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+      <option value="blue">Blue</option>
+      <option value="green">Green</option>
+      <option value="red">Red</option>
+    </select>
+  </div>
+
+  <!-- Sidebar Panel showing live score and cost summary -->
+  <div id="summary" class="fixed top-4 right-8 w-64 p-4 rounded shadow-lg z-40">
+    <div class="flex justify-between items-center mb-2">
+      <span class="font-semibold">Initial Score:</span>
+      <span id="totalScore" class="text-xl font-bold">0</span>
+    </div>
+    <div class="flex justify-between items-center mb-4">
+      <span class="font-semibold">Salesforce Score:</span>
+      <span id="salesforceScore" class="text-xl font-bold">0</span>
+    </div>
+	<div class="font-semibold mb-1">Costs Breakdown:</div>
+    <table id="costBreakdownTable" class="table-auto w-full text-sm mb-3">
+      <thead>
+        <tr>
+          <th class="text-left pb-1">Category</th>
+          <th class="text-right pb-1">Amount</th>
+        </tr>
+      </thead>
+      <tbody id="costBreakdown"></tbody>
+    </table>
+    <div class="p-3 mb-4 bg-blue-100 dark:bg-blue-800 rounded border">
+      <div class="flex items-center">
+        <span class="font-semibold">Potential Opp Cost:</span>
+        <span id="costTotal" class="text-xl font-bold ml-4">1833.51</span>
+      </div>
+    </div>
+    <!-- Button to clear all inputs and reset calculations -->
+    <button id="clearBtn" class="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded">Clear Form</button>
+    <!-- ADD: Download CSV button -->
+    <button type="button" id="downloadCsv" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded mt-2">
+      Download CSV
+    </button>
+    <!-- ADD: Export XLSX button -->
+    <button type="button" id="exportXlsx" class="w-full bg-green-500 hover:bg-green-600 text-white py-2 rounded mt-2">
+      Export to Excel
+    </button>	
+  </div>
+
+  <!-- Main Form Area -->
+  <div class="form-container text-sm max-w-4xl mx-auto mt-12 mb-12">
+    <!-- IR Number & Date inputs -->
+    <div class="flex justify-center space-x-4 mb-6">
+      <div class="flex flex-col">
+        <label for="irNumber" class="mb-1 font-semibold">IR Number</label>
+        <input type="text" id="irNumber" name="irNumber" class="p-2 border rounded" />
+      </div>
+      <div class="flex flex-col">
+        <label for="irDate" class="mb-1 font-semibold">Date</label>
+        <input type="date" id="irDate" name="irDate" class="p-2 border rounded" />
+      </div>
+    </div>
+    <!-- Title Section -->
+    <div class="mb-6 p-4 bg-white dark:bg-gray-700 rounded border border-[var(--panel-border)]">
+		<h1 class="text-2xl font-bold text-center m-0">Proposal Complexity & Opportunity Cost</h1>
+    </div>
+    <!-- Top Inputs: number of weeks, GP threshold, vertical -->
+    <div class="mb-6 p-4 bg-white dark:bg-gray-700 rounded border border-[var(--panel-border)]">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block mb-1">Weeks to Respond</label>
+          <!-- Dropdown that will be populated dynamically up to a max range -->
+          <select id="weeks" class="w-full p-2 rounded border" data-range-max="20"></select>
+        </div>
+        <div>
+          <label class="block mb-1">GP Threshold</label>
+          <select id="gp" class="w-full p-2 rounded border">
+            <option value="">Select GP Threshold</option>
+            <option value="<=150K">&lt;= $150K</option>
+            <option value="<=750K">&lt;= $750K</option>
+            <option value=">=750001">&gt;= $750,001</option>
+          </select>
+        </div>
+        <div>
+          <label class="block mb-1">Vertical</label>
+          <select id="vertical" class="w-full p-2 rounded border">
+            <option value="">Select Vertical</option>
+            <option value="Federal">Federal</option>
+            <option value="SLED">SLED</option>
+            <option value="Commercial">Commercial</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Placeholder for the detailed complexity form generated by JavaScript -->
+    <form id="complexityForm" class="space-y-6"></form>
+  </div>
+
+  <script>
+    // Map high-level service categories to their possible subcategories
+    const subcategoryMap = {
+      'Application Services': ['Agile Software Development','Agile Transformation and Software Craftmanship','Software Advisory Services'],
+      'Consulting Services': ['BAA','Digital','Cloud','Security'],
+      'Infrastructure Services': ['Deployment Services','Enterprise Solutions','Managed Services','Multi-site Services','Adoption Services'],
+      'Lab (ATC) Services': ['Proof of Concept','LaaS'],
+      'Strategic Staffing Services': ['IS Staffing','AS Staffing'],
+      'Supply Chain Services': ['Staging and Integration','Warehousing'],
+      'Automation & Orchestration': ['AI Ops','Cloud Management','DevOps','Enterprise Service Management','Infrastructure Automation'],
+      'Cloud': ['Cloud Data Management','Cloud Management','Cloud Migration','Cloud Networking','Cloud Optimization','Cloud Security','Cloud Strategy'],
+      'Data Center': ['Data Protection','Edge Computing','Facilities Infrastructure','Hyper-Converged Infrastructure (HCI)','Primary Storage','Server Infrastructure'],
+      'Digital': ['Data Analytics & AI','Digital Strategy','Internet of Things (IoT)','Software Development'],
+      'Digital Workspace': ['Contact Center','Digital Workspace Strategy','End-User Computing','Hybrid Work','Meetings','Unified Communications','Workforce AI'],
+      'Environmental, Social & Governance (ESG)': ['ESG Data & AI','ESG Strategy','Sustainable Technology'],
+      'Mobility': ['Private LTE & 5G','Service Provider Mobility (4G/5G)','Telco Cloud','Wi-Fi Networking'],
+      'Networking': ['Application Delivery Controllers','Campus & LAN Switching','Data Center Networking','MPLS and Segment Routing','Optical Networking','Software Defined WAN (SD-WAN)'],
+      'Security Transformation': ['AI Security','API Security','Application Security','Cloud Security','Cyber Range','Cyber Resilience','Cyber Risk and Security','Data Protection/Cyber Recovery','Data Security','Identity & Access Management','Network Security','OEM Integration Services','OT/IoT Security','Other','Platform Optimization','Secure Services Edge (SSE)','Security Operations','Zero Trust']
+    };
+
+    /**
+     * Fill any <select> elements that have a data-range-max attribute
+     * with options numbering from 1 up to that max.
+     */
+    function populateRanges() {
+      document.querySelectorAll('select[data-range-max]').forEach(sel => {
+        const max = parseInt(sel.dataset.rangeMax, 10) || 0;
+        // If it's the weeks dropdown, leave a placeholder option
+        sel.innerHTML = sel.id === 'weeks'
+          ? '<option value="">Select Weeks</option>'
+          : '<option value="0">0</option>';
+        for (let i = 1; i <= max; i++) {
+          sel.insertAdjacentHTML('beforeend', `<option value="${i}">${i}</option>`);
+        }
+      });
+    }
+
+    // Definition of each section of the complexity form, with titles, base index keys, and items
+    const sections = [
+      {
+        title: '📌 Legal, Risk, and Compliance',
+        base: 10,
+        items: [
+          'Terms and Conditions Review','Contract Redline','NDA',
+          'Bid Bond/Performance Bond','Finance','Insurance','Info Security',
+          'Teaming Agreement','Supplier Enablement','Sustainability/HR'
+        ]
+      },
+      {
+        title: '📌 Services',
+        base: 23,
+        items: [
+          { label:'Services Pricing', type:'checkbox' },
+          { label:'SOW Doc Required', type:'checkbox' },
+          { label:'IS Regional Manager/Sale BDM', type:'checkbox' },
+          { label:'Subcontractor/Partner', type:'select', field:'numeric', range:10 },
+          { label:'Global Response Complexity', type:'select', field:'globalResponseComplexity', options:['Simple','Standard','Complex'] },
+          { label:'Project/Implementation Plan or Timeline', type:'checkbox' },
+          { label:'Training', type:'checkbox' }
+        ]
+      },
+      {
+        title: '📌 Service Categories',
+        base: 33,
+        items: [
+          'Application Services','Consulting Services','Infrastructure Services','Lab (ATC) Services',
+          'Strategic Staffing Services','Integration Center (xIC) Services','Software Asset Management',
+          'SMARTnet/Maintenance','ServiceNow','Supply Chain - Staging & Integration Services',
+          'Infra Services - Multi-Site Delivery Services',
+          { label:'Hardware VAR', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] },
+          { label:'Software VAR', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] }
+        ]
+      },
+      {
+        title: '📌 Engineers',
+        base: 47,
+        items: [
+          'BOM','LOE',
+          { label:'Technical Narrative', type:'select', field:'numeric', range:10 },
+          { label:'Technical Questionnaire', type:'select', field:'technicalQuestionnaire', options:['Simple','Standard','Complex'] },
+          { label:'TD&E Team Involvement', type:'select', field:'tdeTeamInvolvement', options:['Simple','Standard','Complex'] },
+          'WBS'
+        ]
+      },
+      {
+        title: '📌 Technology Practice',
+        base: 58,
+        items: [
+          'Automation & Orchestration','Cloud','Data Center','Digital Workspace',
+          'Environmental, Social & Governance (ESG)','Mobility','Networking','Security Transformation'
+        ]
+      },
+      {
+        title: '📌 Proposal Owned Content',
+        base: 68,
+        items: [
+          { label:'References (Contact Info/Cust Name)', type:'select', field:'references', range:20 },
+          { label:'Past Performance/Case Studies', type:'select', field:'numeric', range:5 },
+          { label:'Past Performance Questionnaire', type:'select', field:'numeric', range:5 },
+          { label:'Forms (Non-Legal)', type:'select', field:'numeric', range:10 },
+          { label:'Resumes', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] },
+          { label:'Questionnaire (Non-Technical)', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] },
+          { label:'Non-standard Submission Req (SEWP, Hard Copies, Difficult Portal)', type:'checkbox', weight:3 },
+          'Executive Summary',
+          { label:'OEM Certification Matrix', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] },
+          { label:'Create New Organizational Chart', type:'select', field:'varMapping', options:['Simple','Standard','Complex'] }
+        ]
+      },
+      {
+        title: '📌 Account Management Team',
+        base: 81,
+        items: [
+          'Customer Pricing Template/Format','Cover Letter',
+          { label:'Hardware Quote', type:'select', field:'numeric', range:20 },
+          { label:'Pricing Questionnaire', type:'select', field:'numeric', range:20 }
+        ]
+      },
+      {
+        title: '➕ Add‑Ons (Optional Post Submission Survey Multipliers)',
+        base: 90,
+        items: [
+          { label:'Account Manager Engagement', type:'select', class:'addon-multiplier', options:[{v:0.8,l:'Above Average'},{v:1,l:'Average'},{v:1.2,l:'Below Average'}], default:1 },
+          { label:'Open to Close Time', type:'select', class:'addon-multiplier', options:[{v:0.8,l:'Above Average'},{v:1,l:'Average'},{v:1.2,l:'Below Average'}], default:1 },
+          { label:'Proposal Manager Level of Effort', type:'select', class:'addon-multiplier', options:[{v:0.8,l:'Low'},{v:1,l:'Standard'},{v:1.2,l:'High'}], default:1 },
+          { label:'Clarification and BAFO Difficulty', type:'select', class:'addon-multiplier', options:[{v:1,l:'N/A'},{v:1.1,l:'Low'},{v:1.2,l:'Standard'},{v:1.3,l:'High'}], default:1 }
+        ]
+      }
+    ];
+
+    // Define how to convert selected options into numeric scores
+    const scoreMappings = {
+      globalResponseComplexity: { Simple:3, Standard:4, Complex:6 },
+      varMapping: { Simple:1, Standard:2, Complex:3 },
+      technicalQuestionnaire: { Simple:3, Standard:4, Complex:6 },
+      tdeTeamInvolvement: {Simple:2,Standard:4,Complex:6},
+      references: n => n<11? n*1.5 : n<21? n*1.4 : n<31? n*1.35 : n<41? n*1.325 : n*1.3
+    };
+
+    /**
+     * Build the detailed form based on the sections array above.
+     * Creates collapsible <details> blocks and generates inputs for each item.
+     */
+    function buildForm() {
+      const form = document.getElementById('complexityForm');
+      form.innerHTML = ''; // Clear any existing content
+      sections.forEach(sec => {
+        // Create a <details> block for each section
+        const details = document.createElement('details');
+        details.className = 'border rounded-lg bg-white dark:bg-gray-800 shadow';
+        details.open = true; // Start each section expanded
+        const summary = document.createElement('summary');
+        summary.className = 'px-4 py-2 font-semibold text-green-700 dark:text-green-300';
+        summary.innerText = sec.title;
+        details.appendChild(summary);
+        // Container for all inputs in this section
+        const grid = document.createElement('div');
+        grid.className = 'p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
+
+        // Iterate each item, create checkbox or select as configured
+        sec.items.forEach((item, i) => {
+          const keyCB = `D${sec.base + i}`, keySel = `C${sec.base + i}`;
+          let wrapper;
+
+          if (item.type === 'select') {
+            // Create a dropdown for select-type items
+            wrapper = document.createElement('div');
+            wrapper.className = 'flex flex-col bg-gray-100 dark:bg-gray-700 p-2 rounded';
+            const lbl = document.createElement('label'); lbl.innerText = item.label; lbl.className = 'mb-1';
+            wrapper.appendChild(lbl);
+            const sel = document.createElement('select');
+            sel.className = (item.class || '') + ' score-item p-2 rounded border';
+            sel.dataset.key = keySel;
+            if (item.field) sel.dataset.field = item.field;
+            if (item.range) sel.dataset.rangeMax = item.range;
+            // Remove zero entry for add-on multipliers, keep for everything else
+            if (item.class && item.class.includes('addon-multiplier')) {
+              sel.innerHTML = '';
+            } else {
+              sel.innerHTML = '<option value=\"0\">0</option>';
+            }
+            // Add each provided option
+            if (item.options) item.options.forEach(opt => {
+              const o = document.createElement('option');
+              o.value = opt.v !== undefined ? opt.v : opt;
+              o.text = opt.l !== undefined ? opt.l : opt;
+              sel.appendChild(o);
+            });
+            // For add-on multipliers, set the default (= 'Average', 'Standard', 'N/A')
+            if (item.class && item.class.includes('addon-multiplier') && item.default !== undefined) {
+              sel.dataset.default = item.default;
+              sel.value = item.default;
+            }			
+            wrapper.appendChild(sel);
+          } else {
+            // Create a checkbox for simple items
+            wrapper = document.createElement('label');
+            wrapper.className = 'flex flex-col bg-gray-100 dark:bg-gray-700 p-2 rounded';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.className = 'score-item mb-1'; cb.dataset.key = keyCB;
+            cb.dataset.weight = item.weight || 1;
+            const span = document.createElement('span');
+            span.textContent = typeof item === 'string' ? item : item.label;
+            span.className = 'ml-2';
+            const row = document.createElement('div'); row.className = 'flex items-center';
+            row.appendChild(cb); row.appendChild(span);
+            wrapper.appendChild(row);
+
+            // If this item has subcategories defined, add a hidden multi-select
+            if (subcategoryMap[span.textContent]) {
+              const subWrap = document.createElement('div'); subWrap.className = 'ml-6 mt-2';
+              const subLabel = document.createElement('label'); subLabel.innerText = 'Select Subcategories'; subLabel.className = 'block mb-1 text-sm';
+              subWrap.appendChild(subLabel);
+              const subSelect = document.createElement('select'); subSelect.multiple = true; subSelect.className = 'block w-full p-2 rounded border';
+              subcategoryMap[span.textContent].forEach(opt => {
+                const optEl = document.createElement('option'); optEl.value = optEl.textContent = opt;
+                subSelect.appendChild(optEl);
+              });
+              subWrap.appendChild(subSelect);
+              subWrap.style.display = 'none'; // Hide until checkbox checked
+              wrapper.appendChild(subWrap);
+              // Show/hide subcategory select when checkbox toggles
+              cb.addEventListener('change', () => {
+                subWrap.style.display = cb.checked ? 'block' : 'none';
+              });
+            }
+          }
+
+          grid.appendChild(wrapper);
+        });
+
+        details.appendChild(grid);
+        form.appendChild(details);
+      });
+    }
+
+    /**
+     * Calculate the initial and adjusted Salesforce score based on selected items.
+     */
+    function calculateTotal() {
+      let total = 0;
+      // Sum weights of all checked checkboxes
+      document.querySelectorAll('.score-item[type="checkbox"]').forEach(cb => {
+        if (cb.checked) total += parseFloat(cb.dataset.weight) || 1;
+      });
+      // Sum numeric dropdown selections, applying any score mappings
+      document.querySelectorAll('select.score-item:not(.addon-multiplier)').forEach(el => {
+        const fld = el.dataset.field, v = el.value;
+        if (fld && scoreMappings[fld]) {
+          const m = scoreMappings[fld];
+          total += typeof m === 'function' ? m(parseFloat(v)) : (m[v] || 0);
+        } else if (!isNaN(parseFloat(v))) {
+          total += parseFloat(v);
+        }
+      });
+      // Display the raw total score
+      document.getElementById('totalScore').innerText = total.toFixed(2);
+
+      // Apply any add-on multipliers to get adjusted "Salesforce Score"
+      let mult = 1;
+      document.querySelectorAll('select.addon-multiplier').forEach(el => {
+        const m = parseFloat(el.value);
+        if (!isNaN(m)) mult *= m;
+      });
+      document.getElementById('salesforceScore').innerText = (total * mult).toFixed(2);
+    }
+
+    // Hourly cost rates for different roles and activities
+    const rates = {
+      legalRed:65.99, legalNo:66, finance:65.99,
+      insurance:35.75, bond:35.75, businessManager:67.31,
+      servicesConsultant:67.31, SRC:49.82, GET:85, hardCopy:88
+    };
+    // Weekly service rates by category
+    const svcRates = {
+      'Application Services':85,'Consulting Services':85,'Infrastructure Services':50,
+      'Lab (ATC) Services':85,'Strategic Staffing Services':68,'Integration Center (xIC) Services':68,
+      'Software Asset Management':85,'SMARTnet/Maintenance':50,'ServiceNow':42,
+      'Supply Chain - Staging & Integration Services':68,'Infra Services - Multi-Site Delivery Services':50,
+      'Hardware VAR':1,'Software VAR':1
+    };
+    // Weekly technology practice rates
+    const techRates = {
+      'Automation & Orchestration':85,'Cloud':85,'Data Center':85,'Digital Workspace':85,
+      'Environmental, Social & Governance (ESG)':85,'Mobility':85,'Networking':85,'Security Transformation':85
+    };
+
+    /**
+     * Calculate detailed cost breakdown based on selections, number of weeks, GP band, etc.
+     */
+    function calculateCosts() {
+      const st = {};
+      // Capture state of each score-item (checkbox or select)
+      document.querySelectorAll('.score-item').forEach(el => {
+        st[el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value;
+      });
+      const wks = parseInt(document.getElementById('weeks').value) || 0;
+
+      // Calculate legal review hours and cost
+      const hrR = st['D11'] ? 15 : 0, hrN = st['D10'] ? 6 : 0;
+      const baseLeg = hrR * rates.legalRed + hrN * rates.legalNo;
+      const totLeg = wks === 1 ? baseLeg * 1.5 : wks > 1 ? baseLeg * (wks - 1) + baseLeg * 1.5 : 0;
+
+      // Finance review cost: flat fee $66 if selected and weeks >= 1
+      const totFin = (st['D14'] && wks >= 1) ? 66 : 0;
+
+      // Insurance and bond cost
+      const totInsBond = (st['D15'] ? 3 : 0) * rates.insurance + (st['D13'] ? 3 : 0) * rates.bond;
+
+      // Business manager cost
+      const cBM = (st['D25'] ? 5 : 0) * rates.businessManager;
+      const totBM = wks === 1 ? cBM * 1.5 : wks > 1 ? cBM * (wks - 1) + cBM * 1.5 : 0;
+
+      // Services consultant cost
+      const cSC = (st['D23'] ? 15 : 0) * rates.servicesConsultant;
+      const totSC = wks === 1 ? cSC * 1.5 : wks > 1 ? cSC * (wks - 1) + cSC * 1.5 : 0;
+
+      // Determine GP band for SRC and GET calculations
+      let band = 0;
+      const gp = document.getElementById('gp').value;
+      if (gp === '<=150K') band = 6;
+      else if (gp === '<=750K') band = 7;
+      else if (gp === '>=750001') band = 11;
+      const totSRC = band * rates.SRC, totGET = band * rates.GET;
+
+      // Service category weekly costs
+      let totSvcCats = 0;
+      sections[2].items.forEach((lbl,i) => {
+        if (st[`D${33+i}`]) {
+          const weekly = 15 * (svcRates[lbl]||0);
+          totSvcCats += wks===1 ? weekly*1.5 : wks>1 ? weekly*wks : 0;
+        }
+      });
+
+      // Technology practice weekly costs
+      let totTech = 0;
+      sections[4].items.forEach((lbl,i) => {
+        if (st[`D${58+i}`]) {
+          const weekly = 15 * (techRates[lbl]||0);
+          totTech += wks===1 ? weekly*1.5 : wks>1 ? weekly*wks : 0;
+        }
+      });
+
+      // Proposal team cost based on selected vertical and weeks
+      const vert = document.getElementById('vertical').value;
+      const rateMap = { Federal:50, SLED:50, Commercial:50 };
+      // Proposal team cost: dynamic hours per vertical × $50 rate
+      let baseHours = 0;
+      if (vert === 'Federal') baseHours = 12;
+      else if (vert === 'SLED') baseHours = 16.66;
+      else if (vert === 'Commercial') baseHours = 13.33;
+      const hoursProp = wks === 1
+        ? baseHours * 1.5
+        : wks > 1
+          ? baseHours * (wks - 1) + baseHours * 1.5
+          : 0;
+      const totPropTeam = Math.round(hoursProp * 50);
+
+      // Hard copy printing cost
+      const totHardCopy = (parseInt(st['H75']||0)) * rates.hardCopy;
+
+      // Combine all buckets into a summary and grand total
+      const buckets = {
+        'Legal Cost': totLeg,
+        'Finance Cost': totFin,
+        'Insurance & Bond': totInsBond,
+        'Business Manager': totBM,
+        'Services Consultant': totSC,
+        'SRC': totSRC,
+        'GET': totGET,
+        'Service Categories': totSvcCats,
+        'Technology Practice': totTech,
+        'Proposal Team': totPropTeam,
+        'Hard Copy': totHardCopy
+      };
+      let grand = 0;
+      const cbDiv = document.getElementById('costBreakdown'); cbDiv.innerHTML = '';
+      // Render each cost category in the sidebar and sum up for grand total
+	// Render each cost category as a table row
+      Object.entries(buckets).forEach(([k,v]) => {
+        cbDiv.insertAdjacentHTML('beforeend',
+          `<tr>
+             <td class="py-1">${k}</td>
+             <td class="py-1 text-right">$${v.toFixed(2)}</td>
+           </tr>`
+        );
+        // Include all costs except Proposal Team in potential opp cost
+        grand += v;
+      });
+      document.getElementById('costTotal').innerText = grand.toFixed(2);
+    }
+
+    /**
+     * Reset all inputs to defaults and recalculate scores and costs
+     */
+    function clearForm() {
+      // Uncheck all checkboxes
+      document.querySelectorAll('.score-item[type="checkbox"]').forEach(cb => cb.checked = false);
+      // Reset dropdowns including weeks, GP, vertical
+      document.getElementById('weeks').selectedIndex = 0;
+      document.querySelectorAll('select.score-item:not(.addon-multiplier)').forEach(sel => sel.value = '0');
+      document.getElementById('gp').value = '';
+      document.getElementById('vertical').value = '';
+      // Reset any addon multipliers to default
+      document.querySelectorAll('select.addon-multiplier').forEach(sel => {
+        // Reset to the configured default value
+        sel.value = sel.dataset.default;
+      });
+      // Hide and clear any multi-select subcategory lists
+      document.querySelectorAll('select[multiple]').forEach(sel => {
+        sel.selectedIndex = -1;
+        sel.parentElement.style.display = 'none';
+      });
+      // Re-run calculations with reset state
+      calculateTotal();
+      calculateCosts();
+    }
+
+    // Initialize form and attach event listeners once page DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      buildForm();           // Generate the complexity form
+      populateRanges();      // Fill numeric dropdowns
+      calculateTotal();      // Initial score calculation (zero)
+      calculateCosts();      // Initial cost calculation (zero)
+      // Recalculate on any form change
+      document.getElementById('complexityForm').addEventListener('change', () => {
+        calculateTotal(); calculateCosts();
+      });
+      // Also recalculate when weeks, GP or vertical change
+      ['weeks','gp','vertical'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+          calculateTotal(); calculateCosts();
+        });
+      });
+      // Attach clear button handler
+      document.getElementById('clearBtn').addEventListener('click', clearForm);
+      // Change theme when user selects a new option
+      document.getElementById('themeSelect').addEventListener('change', e => {
+        const th = e.target.value;
+        document.documentElement.setAttribute('data-theme', th);
+        document.documentElement.classList.toggle('dark', th === 'dark');
+      });
+    
+	// CSV download functionality
+	document.getElementById('downloadCsv').addEventListener('click', () => {
+      // 1) Prepend IR Number, Date, then summary scores
+      const basics = [
+        'IR Number','Date','Weeks','GP Threshold','Vertical',
+        'Initial Score','Salesforce Score','Potential Opp Cost'
+      ];
+      const basicValues = [
+        document.getElementById('irNumber').value,
+        document.getElementById('irDate').value,
+        document.getElementById('weeks').value,
+        document.getElementById('gp').value,
+        document.getElementById('vertical').value,
+        document.getElementById('totalScore').innerText,
+        document.getElementById('salesforceScore').innerText,
+        document.getElementById('costTotal').innerText
+      ]; 
+  
+      // 2) Collect every .score-item's label and displayed value
+      const scoreEls = Array.from(document.querySelectorAll('.score-item'));
+      const headers = [...basics];
+      const values  = [...basicValues];
+  
+      scoreEls.forEach(el => {
+        let name, val;
+        if (el.type === 'checkbox') {
+          // full service name is in the adjacent <span>
+          name = el.closest('label').querySelector('span').textContent.trim();
+          // numeric weight if checked, else 0
+          val = el.checked ? (parseFloat(el.dataset.weight) || 1) : 0;
+        } else {
+          // for selects, the label lives in the wrapper <div>'s <label>
+          const wrapper = el.closest('div');
+          name = wrapper.querySelector('label').innerText.trim();
+          // use the displayed option text (e.g. "Simple", "Above Average")
+          val = el.selectedOptions[0].text;
+        }
+        headers.push(name);
+        values.push(val);
+      });
+  
+      // 3) Build CSV text and trigger download
+      const rows = [headers, values]
+        .map(r => r.map(v => `"${v}"`).join(','))
+        .join('\r\n');
+      const blob = new Blob([rows], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Filename: [IR Number input]_ComplexityScore.csv
+      const irValCsv = document.getElementById('irNumber').value || 'IR';
+      a.download = `${irValCsv}_ComplexityScore.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // XLSX export functionality
+    document.getElementById('exportXlsx').addEventListener('click', () => {
+      // 1) Prepend IR Number, Date, then summary scores
+      const basics = [
+        'IR Number','Date','Weeks','GP Threshold','Vertical',
+        'Initial Score','Salesforce Score','Potential Opp Cost'
+      ];
+      const basicValues = [
+        document.getElementById('irNumber').value,
+        document.getElementById('irDate').value,
+        document.getElementById('weeks').value,
+        document.getElementById('gp').value,
+        document.getElementById('vertical').value,
+        document.getElementById('totalScore').innerText,
+        document.getElementById('salesforceScore').innerText,
+        document.getElementById('costTotal').innerText
+      ];
+  
+      // 2) Loop every score-item for [label, displayed-value]
+      const scoreEls = Array.from(document.querySelectorAll('.score-item'));
+      const headers = [...basics];
+      const values  = [...basicValues];
+  
+      scoreEls.forEach(el => {
+        let name, val;
+        if (el.type === 'checkbox') {
+          name = el.closest('label').querySelector('span').textContent.trim();
+          val  = el.checked ? (parseFloat(el.dataset.weight) || 1) : 0;
+        } else {
+          const wrapper = el.closest('div');
+          name = wrapper.querySelector('label').innerText.trim();
+          val  = el.selectedOptions[0].text;
+        }
+        headers.push(name);
+        values.push(val);
+      });
+  
+      // 3) Build & download actual .xlsx with dynamic filename
+      const wb = XLSX.utils.book_new();
+      const data = [headers, values];
+      const ws   = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, 'Submissions');
+      // Filename: [IR Number input]_ComplexityScore.xlsx
+      const irVal = document.getElementById('irNumber').value || 'IR';
+      XLSX.writeFile(wb, `${irVal}_ComplexityScore.xlsx`);
+    });
+	});
+  </script>
+</body>
+</html>
